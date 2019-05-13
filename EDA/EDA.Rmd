@@ -1,0 +1,130 @@
+---
+title: "EDA"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, echo=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+load_reqs <- function(reqs) {
+  for(pkg in reqs) {
+    if (!(pkg %in% installed.packages())) { install.packages(pkg) }
+    suppressPackageStartupMessages(library(pkg, character.only = T))
+  }
+}
+
+# ADD LIBRARIES HERE
+load_reqs(c("tidyr", "dplyr", "data.table", "purrr", "ggplot2", "corrplot", "gridExtra", "grid", "cowplot"))
+```
+
+```{r echo=FALSE, warning=FALSE}
+train <- read.csv('../data/BlackFriday_train.csv')
+test <- read.csv('../data/BlackFriday_test.csv')
+```
+
+### Check if there are any missing values in training and test datasets
+
+```{r echo=TRUE, warning=FALSE}
+train_na_cols <- colnames(train)[colSums(is.na(train)) > 0]
+test_na_cols <- colnames(test)[colSums(is.na(test)) > 0]
+
+train_na_cols
+test_na_cols
+```
+
+**Product_Category_2 & Product_Category_3 contain NAs**
+
+***
+
+### Check for the structure of the dataset
+```{r echo=TRUE, warning=FALSE}
+glimpse(train)
+glimpse(test)
+```
+
+***
+
+### Count & Percentage of NAs
+```{r echo=FALSE, warning=FALSE}
+train_count_of_NAs <- colSums(is.na(train[train_na_cols]))
+train_count_of_NAs_percent <- train_count_of_NAs/nrow(train)*100
+
+print("Train NAs:")
+train_count_of_NAs
+print("%:")
+train_count_of_NAs_percent
+
+
+test_count_of_NAs <- colSums(is.na(test[test_na_cols]))
+test_count_of_NAs_percent <- test_count_of_NAs/nrow(test)*100
+
+print("Test NAs:")
+test_count_of_NAs
+print("%:")
+test_count_of_NAs_percent
+```
+
+
+***
+
+#### Check for the range of target variable
+```{r echo=FALSE, warning=FALSE}
+summary(train$Purchase)
+```
+
+***
+
+#### Numerical Features
+```{r echo=FALSE, fig.height=6, warning=FALSE}
+
+numeric_vars <- unlist(lapply(train, is.numeric)) 
+histograms = list()
+for (i in colnames(train[numeric_vars])){
+  histograms[[i]] <-
+    ggplot(
+      train[numeric_vars],
+      aes_string(x=i)) +
+      geom_histogram(bins = 35) +
+      theme_bw(base_size = 13)+
+      labs(fill = "Target")
+}
+plot_grid(plotlist = histograms, ncol = 2)
+```
+
+
+***
+
+#### Categorical Features
+```{r echo=FALSE, fig.height=14, warning=FALSE}
+
+cat_vars <- unlist(lapply(train, is.factor)) 
+barPlots = list()
+for (i in colnames(train[cat_vars])){
+      barPlots[[i]] <-
+        ggplot(
+          train[cat_vars],
+          aes_string(x=i)) +
+          geom_bar() +
+          theme_bw(base_size = 13)
+}
+plot_grid(plotlist = barPlots, ncol = 1)
+```
+
+
+***
+
+#### Correlation between two numerical features
+
+```{r echo=TRUE, warning=FALSE}
+train_num <- dplyr::select_if(train, is.numeric)
+res <- cor(train_num)
+corrplot.mixed(
+          res,
+          upper="circle",
+          lower="number",
+          tl.col = "black",
+          number.cex = .8,
+          tl.cex=.8)
+```
