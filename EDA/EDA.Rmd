@@ -16,25 +16,17 @@ load_reqs <- function(reqs) {
 }
 
 # ADD LIBRARIES HERE
-load_reqs(c("tidyr", "dplyr", "data.table", "purrr", "ggplot2", "corrplot", "gridExtra", "grid", "cowplot"))
+load_reqs(c("tidyr", "dplyr", "data.table", "purrr", "ggplot2", "corrplot", "gridExtra", "grid", "cowplot", "PerformanceAnalytics"))
 ```
 
 ```{r echo=FALSE, warning=FALSE}
-train <- read.csv('../data/BlackFriday_train.csv')
-test <- read.csv('../data/BlackFriday_test.csv')
+########################################
+### Loading Data
+########################################
+
+train <- read.csv('../data/house_price_train.csv')
+test <- read.csv('../data/house_price_test.csv')
 ```
-
-### Check if there are any missing values in training and test datasets
-
-```{r echo=TRUE, warning=FALSE}
-train_na_cols <- colnames(train)[colSums(is.na(train)) > 0]
-test_na_cols <- colnames(test)[colSums(is.na(test)) > 0]
-
-train_na_cols
-test_na_cols
-```
-
-**Product_Category_2 & Product_Category_3 contain NAs**
 
 ***
 
@@ -44,87 +36,131 @@ glimpse(train)
 glimpse(test)
 ```
 
-***
-
-### Count & Percentage of NAs
 ```{r echo=FALSE, warning=FALSE}
-train_count_of_NAs <- colSums(is.na(train[train_na_cols]))
-train_count_of_NAs_percent <- train_count_of_NAs/nrow(train)*100
+########################################
+### DATA CLEANING
+########################################
+D = c("Purchase", "User_ID", "Product_ID")
+
+numeric_vars <- unlist(lapply(train, is.integer)) 
+
+for (i in colnames(train[numeric_vars])){
+  if((i %in% DONT_CHANGE_VARS )== FALSE) {
+  train[[i]] = as.factor(train[[i]])
+  }
+}
+
+numeric_vars <- unlist(lapply(test, is.integer)) 
+
+for (i in colnames(test[numeric_vars])){
+  if((i %in% DONT_CHANGE_VARS )== FALSE) {
+  test[[i]] = as.factor(test[[i]])
+  }
+}
+```
+
+```{r echo=FALSE, warning=FALSE}
+########################################
+### VARIABLES METADATA
+########################################
+TARGET <- "price"
+IGNORE <- c("id", "date")
+
+CATEGORICAL <- unlist(lapply(train, is.factor)) 
+NUMERIC <- unlist(lapply(train, is.numeric)) 
+
+NUMERIC[IGNORE] <- FALSE
+CATEGORICAL[IGNORE] <- FALSE
+NUMERIC[TARGET] <- FALSE
+CATEGORICAL[TARGET] <- FALSE
+```
+
+
+
+### Check if there are any missing values in training and test datasets
+
+```{r echo=TRUE, warning=FALSE}
+train_na_cols <- colnames(train)[colSums(is.na(train)) > 0]
+test_na_cols <- colnames(test)[colSums(is.na(test)) > 0]
 
 print("Train NAs:")
-train_count_of_NAs
-print("%:")
-train_count_of_NAs_percent
-
-
-test_count_of_NAs <- colSums(is.na(test[test_na_cols]))
-test_count_of_NAs_percent <- test_count_of_NAs/nrow(test)*100
-
+length(train_na_cols)
 print("Test NAs:")
-test_count_of_NAs
-print("%:")
-test_count_of_NAs_percent
+length(test_na_cols)
 ```
 
+**No NAs found**
 
 ***
 
-#### Check for the range of target variable
-```{r echo=FALSE, warning=FALSE}
-summary(train$Purchase)
-```
-
-***
-
-#### Numerical Features
+#### Histogram of numerical Features
 ```{r echo=FALSE, fig.height=6, warning=FALSE}
-
-numeric_vars <- unlist(lapply(train, is.numeric)) 
 histograms = list()
-for (i in colnames(train[numeric_vars])){
+for (i in colnames(train[NUMERIC])){
   histograms[[i]] <-
     ggplot(
-      train[numeric_vars],
+      train[NUMERIC],
       aes_string(x=i)) +
-      geom_histogram(bins = 35) +
-      theme_bw(base_size = 13)+
-      labs(fill = "Target")
+      geom_histogram(bins = 40, fill="blue") +
+      theme_classic()
 }
-plot_grid(plotlist = histograms, ncol = 2)
+plot_grid(plotlist = histograms, ncol = 3)
 ```
 
+**Some skewed distributions**
+**Skewed vairables can be a problem for linear regression**
 
 ***
 
-#### Categorical Features
-```{r echo=FALSE, fig.height=14, warning=FALSE}
+#### Variable skewness sorted
 
-cat_vars <- unlist(lapply(train, is.factor)) 
-barPlots = list()
-for (i in colnames(train[cat_vars])){
-      barPlots[[i]] <-
-        ggplot(
-          train[cat_vars],
-          aes_string(x=i)) +
-          geom_bar() +
-          theme_bw(base_size = 13)
+```{r echo=TRUE, fig.height=5, warning=FALSE}
+skewness <- melt(NUMERIC[NUMERIC==TRUE], value.name = "value")
+skewness$var <- rownames(skewness)
+                         
+for (i in colnames(train[NUMERIC])){
+  skewness[i,"value"] = skewness(train[i])
 }
-plot_grid(plotlist = barPlots, ncol = 1)
+
+skewness <- skewness[order(skewness$value),]
+
+ggplot(data=skewness, aes(y=value, x=reorder(var, value))) +
+  geom_bar(stat = "identity", fill="blue") +
+  theme_classic()+
+  theme(axis.text.x = element_text(angle = 90))+
+  ggtitle("Variables Skewness")
 ```
 
+***
+
+#### Distribution of Target variable
+
+```{r echo=TRUE, warning=FALSE}
+scaleFUN <- function(x) sprintf("%.0f", x)
+
+ggplot(train) + 
+  geom_density(aes(x=price), alpha = 0.7)+
+  geom_histogram(aes(x=price), bins = 40, position="identity", fill="blue", alpha = 0.7) + 
+  scale_x_continuous(labels=scaleFUN)+
+  theme_classic()
+summary(train$price)
+```
 
 ***
 
 #### Correlation between two numerical features
 
 ```{r echo=TRUE, warning=FALSE}
-train_num <- dplyr::select_if(train, is.numeric)
-res <- cor(train_num)
+
+res <- cor(train[NUMERIC])
 corrplot.mixed(
           res,
           upper="circle",
           lower="number",
           tl.col = "black",
-          number.cex = .8,
-          tl.cex=.8)
+          number.cex = .6,
+          tl.cex=.6)
 ```
+
+**There is a high correlation between some of the variables, this can be a problem with linear regression**
+
