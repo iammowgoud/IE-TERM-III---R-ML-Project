@@ -16,7 +16,7 @@ load_reqs <- function(reqs) {
 }
 
 # ADD LIBRARIES HERE
-load_reqs(c("tidyr", "dplyr", "data.table", "purrr", "ggplot2", "corrplot", "gridExtra", "grid", "cowplot", "PerformanceAnalytics"))
+load_reqs(c("tidyr", "dplyr", "data.table", "purrr", "ggplot2", "corrplot", "gridExtra", "grid", "cowplot", "PerformanceAnalytics", "dichromat", "wesanderson"))
 ```
 
 ```{r echo=FALSE, warning=FALSE}
@@ -40,22 +40,10 @@ glimpse(test)
 ########################################
 ### DATA CLEANING
 ########################################
-D = c("Purchase", "User_ID", "Product_ID")
-
 numeric_vars <- unlist(lapply(train, is.integer)) 
 
-for (i in colnames(train[numeric_vars])){
-  if((i %in% DONT_CHANGE_VARS )== FALSE) {
+for (i in c('id', 'waterfront')){
   train[[i]] = as.factor(train[[i]])
-  }
-}
-
-numeric_vars <- unlist(lapply(test, is.integer)) 
-
-for (i in colnames(test[numeric_vars])){
-  if((i %in% DONT_CHANGE_VARS )== FALSE) {
-  test[[i]] = as.factor(test[[i]])
-  }
 }
 ```
 
@@ -94,8 +82,12 @@ length(test_na_cols)
 ***
 
 #### Histogram of numerical Features
-```{r echo=FALSE, fig.height=6, warning=FALSE}
+```{r echo=FALSE, fig.height=5, warning=FALSE}
 histograms = list()
+histograms_against_target = list()
+
+Quantile <- ntile(train$price, 4)
+
 for (i in colnames(train[NUMERIC])){
   histograms[[i]] <-
     ggplot(
@@ -103,8 +95,16 @@ for (i in colnames(train[NUMERIC])){
       aes_string(x=i)) +
       geom_histogram(bins = 40, fill="blue") +
       theme_classic()
+  
+  histograms_against_target[[i]] <-
+    ggplot(train, aes_string(x = i, fill = as.factor(Quantile))) +
+    geom_histogram(bins = 50) +
+    ylab("Count") +
+    xlab(i) + 
+    scale_fill_discrete(name="Price Quantile",)
 }
 plot_grid(plotlist = histograms, ncol = 3)
+plot_grid(plotlist = histograms_against_target, ncol = 3)
 ```
 
 **Some skewed distributions**
@@ -114,7 +114,7 @@ plot_grid(plotlist = histograms, ncol = 3)
 
 #### Variable skewness sorted
 
-```{r echo=TRUE, fig.height=5, warning=FALSE}
+```{r echo=TRUE, fig.height=2, warning=FALSE}
 skewness <- melt(NUMERIC[NUMERIC==TRUE], value.name = "value")
 skewness$var <- rownames(skewness)
                          
@@ -127,6 +127,8 @@ skewness <- skewness[order(skewness$value),]
 ggplot(data=skewness, aes(y=value, x=reorder(var, value))) +
   geom_bar(stat = "identity", fill="blue") +
   theme_classic()+
+  xlab("Variable")+
+  ylab("Skewness")+
   theme(axis.text.x = element_text(angle = 90))+
   ggtitle("Variables Skewness")
 ```
@@ -138,29 +140,146 @@ ggplot(data=skewness, aes(y=value, x=reorder(var, value))) +
 ```{r echo=TRUE, warning=FALSE}
 scaleFUN <- function(x) sprintf("%.0f", x)
 
+pal <- wes_palette("Zissou1", 100, type = "continuous")
+
+
 ggplot(train) + 
   geom_density(aes(x=price), alpha = 0.7)+
-  geom_histogram(aes(x=price), bins = 40, position="identity", fill="blue", alpha = 0.7) + 
   scale_x_continuous(labels=scaleFUN)+
   theme_classic()
+
+
+ggplot(train, aes(x = price, fill = ..count..)) +
+  geom_histogram(bins=40) +
+  scale_fill_gradientn(colours = pal) +
+  ggtitle("Histogram of Price") +
+  ylab("Count of houses") +
+  xlab("Housing Price") + 
+  scale_x_continuous(labels=scaleFUN)+
+  theme(plot.title = element_text(hjust = 0.5))
+
+#Summary
 summary(train$price)
 ```
+
+**From these shapes, the distribution of our target variable `price` is skewed to right.**
+**One appriach to fix this skewness is taking the log of price.**
+
+***
+
+#### Taking log of price
+
+```{r echo=TRUE,fig.height=4, warning=FALSE}
+#log of price
+train$logPrice <- log(train$price)
+
+scaleFUN <- function(x) sprintf("%.0f", x)
+
+pal <- wes_palette("Zissou1", 100, type = "continuous")
+
+
+ggplot(train) + 
+  geom_density(aes(x=logPrice), alpha = 0.7)+
+  scale_x_continuous(labels=scaleFUN)+
+  theme_classic()
+
+
+ggplot(train, aes(x = logPrice, fill = ..count..)) +
+  geom_histogram(bins=40) +
+  ggtitle("Histogram of LOG Price") +
+  scale_fill_gradientn(colours = pal) +
+  ylab("Count of houses") +
+  xlab("LOG Housing Price") + 
+  scale_x_continuous(labels=scaleFUN)+
+  theme(plot.title = element_text(hjust = 0.5))
+
+#Summary
+summary(train$logPrice)
+```
+
+**logPrice is now normally distributed. We can use this with linear models**
 
 ***
 
 #### Correlation between two numerical features
 
-```{r echo=TRUE, warning=FALSE}
+```{r echo=TRUE,fig.height=4, warning=FALSE}
 
-res <- cor(train[NUMERIC])
+correlations <- cor(train[NUMERIC])
+col<- colorRampPalette(c("blue", "white", "red"))(20)
+
+signifcentCorrelations <- correlations
+signifcentCorrelations[abs(signifcentCorrelations)<0.5] <- 0
+
 corrplot.mixed(
-          res,
+          correlations,
           upper="circle",
           lower="number",
           tl.col = "black",
-          number.cex = .6,
-          tl.cex=.6)
+          tl.pos="lt",
+          insig = "blank",
+          order="FPC",
+          number.cex = .8,
+          tl.cex=1)
+
+## Heatmap for correlations
+heatmap(x = correlations, col = col, symm = TRUE)
 ```
 
 **There is a high correlation between some of the variables, this can be a problem with linear regression**
 
+***
+
+# Correlations with Target variable
+
+```{r echo=TRUE,fig.height=2, warning=FALSE}
+targetCorr <- data.frame(cor(train[NUMERIC], train$logPrice))
+colnames(targetCorr)[1] <- "corr"
+targetCorr$var <- rownames(targetCorr)
+
+pal <- wes_palette("Zissou1", 100, type = "continuous")
+
+ggplot(data=targetCorr, aes( y=corr, x=reorder(var, corr))) +
+  geom_bar(stat = "identity", aes(fill=corr)) +
+  scale_fill_gradientn(colours = pal) +
+  theme_classic()+
+  xlab("Variable")+
+  ylab("p-value")+
+  theme(axis.text.x = element_text(angle = 90))+
+  ggtitle("Correlations with target (price)")
+```
+
+***
+
+# Exploring grade variable
+
+```{r echo=TRUE, warning=FALSE}
+train %>%
+{
+  ggplot(.,aes(x=long,y=lat,size=price,color=zipcode)) + 
+    geom_point(alpha=0.3) + 
+    guides(color='none') +
+    coord_fixed(1.3) + 
+    scale_size(labels = scales::dollar,breaks = signif(10^seq(5,9,0.5),2)) +
+    ggtitle( 
+      "King County, WA, Spatial Layout of Housing Data",
+      "colored by zip and sized by price" 
+    )
+} %>%
+  print()
+```
+
+***
+
+# Number of levels values in each variable (bucketizing/binning ?)
+
+```{r echo=TRUE, warning=FALSE}
+for (i in colnames(train[NUMERIC])){
+  print(
+    paste(i, nrow(unique(train[i])), sep = " => ")
+    )
+}
+
+```
+
+***
