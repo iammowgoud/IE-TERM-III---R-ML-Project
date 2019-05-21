@@ -1,0 +1,95 @@
+---
+title: "FE"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r setup, echo=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+load_reqs <- function(reqs) {
+  for(pkg in reqs) {
+    if (!(pkg %in% installed.packages())) { install.packages(pkg) }
+    suppressPackageStartupMessages(library(pkg, character.only = T))
+  }
+}
+
+# ADD LIBRARIES HERE
+load_reqs(c("tidyr", "dplyr", "data.table", "purrr", "ggplot2", "corrplot", "gridExtra", "grid", "cowplot", "PerformanceAnalytics", "dichromat", "wesanderson"))
+```
+
+```{r echo=FALSE, warning=FALSE}
+########################################
+### Loading Data
+########################################
+
+train <- read.csv('../data/house_price_train.csv')
+test <- read.csv('../data/house_price_test.csv')
+```
+
+***
+
+### Drop
+```{r echo=TRUE, warning=FALSE}
+for (i in c('id', "sqft_lot", "sqft_lot15", "date", "yr_built", "long", "lat",            "sqft_above")){
+  train[[i]] <- NULL
+}
+```
+
+***
+
+### binarize
+```{r echo=TRUE, warning=FALSE}
+train$yr_renovated[train$yr_renovated != 0] = 1
+train$sqft_basement[train$sqft_basement != 0] = 1
+```
+
+***
+
+### Convert to factor
+```{r echo=TRUE, warning=FALSE}
+for (i in c('bedrooms', 'floors', 'waterfront', 'view', 'condition', 'zipcode', 'yr_renovated', 'sqft_basement')){
+  train[[i]] = as.factor(train[[i]])
+}
+
+train <- train[train$bedrooms != 11, ]
+train <- train[train$bedrooms != 33, ]
+colnames(train) <- train[train$sqft_living != 13540, ]
+```
+
+
+### Model
+
+```{r echo=TRUE, warning=FALSE}
+model <- lm(formula = price ~  bathrooms + floors + waterfront +
+              view + condition + sqft_basement + yr_renovated +
+              zipcode + sqft_living15 + sqft_living + grade+
+              waterfront + view + bedrooms,
+          data = train)
+summary(model)
+```
+
+
+```{r}
+# Bedrooms are not statisticaaly significant, so we would omit it.
+model = lm(formula = price ~  bathrooms + floors + waterfront + view + condition +
+             + sqft_basement + yr_renovated + zipcode + sqft_living15 + sqft_living + grade,
+           data = train)
+summary(model)
+
+hist(model$residuals)
+mean(model$residuals)
+```
+
+```{r}
+y_pred = predict(model, newdata = train)
+ggplot() +
+  geom_point(aes(x = train$sqft_living, y = train$price),
+             colour = 'black') +
+  geom_line(aes(x = train$sqft_living, y = y_pred),
+            colour = 'blue') +
+  ggtitle('Predictions on Train') +
+  xlab('Sqft_living') +
+  ylab('Price')
+```

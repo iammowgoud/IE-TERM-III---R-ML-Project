@@ -3,6 +3,7 @@ title: "EDA"
 output:
   html_document:
     df_print: paged
+    css: styles.css
 ---
 
 ```{r setup, echo=FALSE, warning=FALSE}
@@ -16,7 +17,7 @@ load_reqs <- function(reqs) {
 }
 
 # ADD LIBRARIES HERE
-load_reqs(c("tidyr", "dplyr", "data.table", "purrr", "ggplot2", "corrplot", "gridExtra", "grid", "cowplot", "PerformanceAnalytics", "dichromat", "wesanderson"))
+load_reqs(c("tidyr", "dplyr", "data.table", "purrr", "ggplot2", "corrplot", "gridExtra", "grid", "cowplot", "PerformanceAnalytics", "dichromat", "wesanderson", "Metrics", "car", "DAAG"))
 ```
 
 ```{r echo=FALSE, warning=FALSE}
@@ -33,8 +34,12 @@ test <- read.csv('../data/house_price_test.csv')
 ### Check for the structure of the dataset
 ```{r echo=TRUE, warning=FALSE}
 glimpse(train)
-glimpse(test)
+head(train)
 ```
+
+<p class="todo">
+TODO in FE: Drop `id`
+</p>
 
 ```{r echo=FALSE, warning=FALSE}
 ########################################
@@ -42,7 +47,7 @@ glimpse(test)
 ########################################
 numeric_vars <- unlist(lapply(train, is.integer)) 
 
-for (i in c('id', 'waterfront')){
+for (i in c('id')){
   train[[i]] = as.factor(train[[i]])
 }
 ```
@@ -51,23 +56,27 @@ for (i in c('id', 'waterfront')){
 ########################################
 ### VARIABLES METADATA
 ########################################
-TARGET <- "price"
-IGNORE <- c("id", "date")
+updateMetaData<- function(ignore, target) {
+  TARGET <<- target
+  IGNORE <<- ignore
+  
+  CATEGORICAL <<- unlist(lapply(train, is.factor)) 
+  NUMERIC <<- unlist(lapply(train, is.numeric)) 
+  
+  NUMERIC[IGNORE] <<- FALSE
+  CATEGORICAL[IGNORE] <<- FALSE
+  NUMERIC[TARGET] <<- FALSE
+  CATEGORICAL[TARGET] <<- FALSE
+}
 
-CATEGORICAL <- unlist(lapply(train, is.factor)) 
-NUMERIC <- unlist(lapply(train, is.numeric)) 
-
-NUMERIC[IGNORE] <- FALSE
-CATEGORICAL[IGNORE] <- FALSE
-NUMERIC[TARGET] <- FALSE
-CATEGORICAL[TARGET] <- FALSE
+updateMetaData(ignore=c("id", "date"), target="price")
 ```
 
 
 
 ### Check if there are any missing values in training and test datasets
 
-```{r echo=TRUE, warning=FALSE}
+```{r echo=FALSE, warning=FALSE}
 train_na_cols <- colnames(train)[colSums(is.na(train)) > 0]
 test_na_cols <- colnames(test)[colSums(is.na(test)) > 0]
 
@@ -81,12 +90,10 @@ length(test_na_cols)
 
 ***
 
-#### Histogram of numerical Features
-```{r echo=FALSE, fig.height=5, warning=FALSE}
-histograms = list()
-histograms_against_target = list()
+#### Histograms of numerical Features 
 
-Quantile <- ntile(train$price, 4)
+```{r echo=FALSE, fig.height=7, warning=FALSE}
+histograms = list()
 
 for (i in colnames(train[NUMERIC])){
   histograms[[i]] <-
@@ -95,26 +102,47 @@ for (i in colnames(train[NUMERIC])){
       aes_string(x=i)) +
       geom_histogram(bins = 40, fill="blue") +
       theme_classic()
-  
-  histograms_against_target[[i]] <-
-    ggplot(train, aes_string(x = i, fill = as.factor(Quantile))) +
-    geom_histogram(bins = 50) +
-    ylab("Count") +
-    xlab(i) + 
-    scale_fill_discrete(name="Price Quantile",)
 }
 plot_grid(plotlist = histograms, ncol = 3)
-plot_grid(plotlist = histograms_against_target, ncol = 3)
 ```
 
 **Some skewed distributions**
+
 **Skewed vairables can be a problem for linear regression**
+
+***
+
+#### Histograms against target
+
+**Color coded by Price Quantile 1=lowest 25%, 4= highest 25%**
+
+```{r echo=FALSE, fig.height=10, warning=FALSE}
+histograms_against_target = list()
+
+Quantile <- ntile(train$price, 4)
+
+for (i in colnames(train[NUMERIC])){
+
+  histograms_against_target[[i]] <-
+    ggplot(train, aes_string(x = i, fill = as.factor(Quantile))) +
+    geom_histogram(bins = 40) +
+    scale_fill_discrete(name="Price")+
+    theme(legend.position = "bottom")+
+    theme_classic()
+}
+
+plot_grid(plotlist = histograms_against_target, ncol = 2)
+```
+
+**Some clear patterns are appear here, for example houses in the highest price quantile (most expensive) only exist at certain latitudes (between 47.5 and 47.7).**
+
+**Pay attention to it in variable correlation analysis!!**
 
 ***
 
 #### Variable skewness sorted
 
-```{r echo=TRUE, fig.height=2, warning=FALSE}
+```{r echo=FALSE, fig.height=3, warning=FALSE}
 skewness <- melt(NUMERIC[NUMERIC==TRUE], value.name = "value")
 skewness$var <- rownames(skewness)
                          
@@ -137,61 +165,63 @@ ggplot(data=skewness, aes(y=value, x=reorder(var, value))) +
 
 #### Distribution of Target variable
 
-```{r echo=TRUE, warning=FALSE}
+```{r echo=FALSE, fig.height=4, warning=FALSE}
 scaleFUN <- function(x) sprintf("%.0f", x)
 
 pal <- wes_palette("Zissou1", 100, type = "continuous")
 
 
-ggplot(train) + 
-  geom_density(aes(x=price), alpha = 0.7)+
-  scale_x_continuous(labels=scaleFUN)+
-  theme_classic()
+g1 <- ggplot(train) + 
+        geom_density(aes(x=price), alpha = 0.7)+
+        ggtitle("Histogram of Price") +
+        scale_x_continuous(labels=scaleFUN)+
+        theme_classic()
 
 
-ggplot(train, aes(x = price, fill = ..count..)) +
-  geom_histogram(bins=40) +
-  scale_fill_gradientn(colours = pal) +
-  ggtitle("Histogram of Price") +
-  ylab("Count of houses") +
-  xlab("Housing Price") + 
-  scale_x_continuous(labels=scaleFUN)+
-  theme(plot.title = element_text(hjust = 0.5))
+g2 <- ggplot(train, aes(x = price, fill = ..count..)) +
+        geom_histogram(bins=40) +
+        scale_fill_gradientn(colours = pal) +
+        ylab("Count of houses") +
+        xlab("Housing Price") + 
+        scale_x_continuous(labels=scaleFUN)+
+        theme(plot.title = element_text(hjust = 0.5))
+
+plot_grid(plotlist = list(g1, g2), nrow = 2)
 
 #Summary
 summary(train$price)
 ```
 
 **From these shapes, the distribution of our target variable `price` is skewed to right.**
+
 **One appriach to fix this skewness is taking the log of price.**
 
 ***
 
-#### Taking log of price
+#### Try taking log of price
 
-```{r echo=TRUE,fig.height=4, warning=FALSE}
+```{r echo=FALSE,fig.height=4, warning=FALSE}
 #log of price
 train$logPrice <- log(train$price)
 
 scaleFUN <- function(x) sprintf("%.0f", x)
 
-pal <- wes_palette("Zissou1", 100, type = "continuous")
+g1 <- ggplot(train) + 
+        geom_density(aes(x=logPrice), alpha = 0.7)+
+        ggtitle("Histogram of LOG Price") +
+        scale_x_continuous(labels=scaleFUN)+
+        theme_classic()
 
 
-ggplot(train) + 
-  geom_density(aes(x=logPrice), alpha = 0.7)+
-  scale_x_continuous(labels=scaleFUN)+
-  theme_classic()
+g2 <- ggplot(train, aes(x = logPrice, fill = ..count..)) +
+        geom_histogram(bins=40) +
+        scale_fill_gradientn(colours = pal) +
+        ylab("Count of houses") +
+        xlab("LOG Housing Price") + 
+        scale_x_continuous(labels=scaleFUN)+
+        theme(plot.title = element_text(hjust = 0.5))
 
-
-ggplot(train, aes(x = logPrice, fill = ..count..)) +
-  geom_histogram(bins=40) +
-  ggtitle("Histogram of LOG Price") +
-  scale_fill_gradientn(colours = pal) +
-  ylab("Count of houses") +
-  xlab("LOG Housing Price") + 
-  scale_x_continuous(labels=scaleFUN)+
-  theme(plot.title = element_text(hjust = 0.5))
+plot_grid(plotlist = list(g1, g2), nrow = 2)
 
 #Summary
 summary(train$logPrice)
@@ -199,17 +229,37 @@ summary(train$logPrice)
 
 **logPrice is now normally distributed. We can use this with linear models**
 
+<p class="todo">
+TODO in FE: log Target Variable (Price)
+</p>
+
+
+***
+
+#### Check date varibale format
+
+```{r echo=TRUE, warning=FALSE}
+head(train$date)
+```
+
+**It's better to convert it to just number so we can check corrleation with target**
+
+```{r echo=FALSE, warning=FALSE}
+# Convert
+train$date <- as.Date(train$date, format = "%m/%d/%y")
+train$date <- as.integer( format(train$date, "%Y%m%d") )
+   
+updateMetaData(ignore=c("id"), target="price")
+```
+
 ***
 
 #### Correlation between two numerical features
 
-```{r echo=TRUE,fig.height=4, warning=FALSE}
+```{r echo=FALSE,fig.height=5, warning=FALSE}
 
 correlations <- cor(train[NUMERIC])
 col<- colorRampPalette(c("blue", "white", "red"))(20)
-
-signifcentCorrelations <- correlations
-signifcentCorrelations[abs(signifcentCorrelations)<0.5] <- 0
 
 corrplot.mixed(
           correlations,
@@ -232,8 +282,8 @@ heatmap(x = correlations, col = col, symm = TRUE)
 
 # Correlations with Target variable
 
-```{r echo=TRUE,fig.height=2, warning=FALSE}
-targetCorr <- data.frame(cor(train[NUMERIC], train$logPrice))
+```{r echo=FALSE,fig.height=3, warning=FALSE}
+targetCorr <- data.frame(cor(train[NUMERIC], train$price))
 colnames(targetCorr)[1] <- "corr"
 targetCorr$var <- rownames(targetCorr)
 
@@ -247,39 +297,206 @@ ggplot(data=targetCorr, aes( y=corr, x=reorder(var, corr))) +
   ylab("p-value")+
   theme(axis.text.x = element_text(angle = 90))+
   ggtitle("Correlations with target (price)")
+
+targetCorr
+```
+
+<p class="subtitle"> Highly correlated variables with price: </p>
+
+- price and sqft_living have a correlation of 0.7
+- price and grade have a correlation of 0.6
+- price and sqft_above have a correlation of 0.6
+- price and sqft_living15 have a correlation of 0.58
+- price and bathrooms have a correlation of 0.53
+
+<p class="subtitle"> Very weakly correlated variables: </p>
+
+- sqft_lot, sqft_lot15, date, yr_built, long
+
+<p class="subtitle"> Needs more analysis: </p>
+
+- condition, waterfront, bathrooms, and floors may be considered as categorical vars so leave them for now.
+
+<p class="todo">
+TODO in FE: Drop sqft_lot, sqft_lot15, date, yr_built, long
+</p>
+
+```{r echo=FALSE, warning=FALSE}
+train$sqft_lot = NULL
+train$sqft_lot15 = NULL
+train$date = NULL
+train$yr_built = NULL
+train$long = NULL
 ```
 
 ***
 
-# Exploring grade variable
+#### Zeroing in on Multicollinearity (most correlated varibales with each other)
+
+```{r echo=FALSE,fig.height=5, warning=FALSE}
+signifcentCorrelations <- correlations
+signifcentCorrelations[abs(signifcentCorrelations)<0.7] <- 0
+
+corrplot.mixed(
+          signifcentCorrelations,
+          upper="circle",
+          lower="number",
+          tl.col = "black",
+          tl.pos="lt",
+          insig = "blank",
+          order="FPC",
+          number.cex = .8,
+          tl.cex=1)
+
+## Heatmap for correlations
+heatmap(x = signifcentCorrelations, col = col, symm = TRUE)
+```
+
+<p class="subtitle"> Highly correlated variables with each other: </p>
+
+- sqft_living and sqft_above have a correlation of 0.88
+- sqft_above and grade have a correlation of 0.76 (ignore as sqft_above will be drop anyway)
+- sqft_living and sqft_living15 have a correlation of 0.76
+- sqft_living and grade have a correlation of 0.76
+- sqft living and bathrooms have a correlation of 0.76
+- sqft_lot and sqft_lot15 have a correlation of 0.72 (ignore as both will be drop anyway)
+
+***
+
+#### Check Multicollinearity between sqft_living and sqft_above have (0.88) using VIF 
+
+**http://www.sthda.com/english/articles/39-regression-model-diagnostics/160-multicollinearity-essentials-and-vif-in-r/**
 
 ```{r echo=TRUE, warning=FALSE}
-train %>%
-{
-  ggplot(.,aes(x=long,y=lat,size=price,color=zipcode)) + 
-    geom_point(alpha=0.3) + 
-    guides(color='none') +
-    coord_fixed(1.3) + 
-    scale_size(labels = scales::dollar,breaks = signif(10^seq(5,9,0.5),2)) +
-    ggtitle( 
-      "King County, WA, Spatial Layout of Housing Data",
-      "colored by zip and sized by price" 
-    )
-} %>%
-  print()
+model = lm(formula = price ~ sqft_living + sqft_above,
+               data = train)
+vif(model)
 ```
+
+**Very close to 5 (upper limit according to articles)**
+
+**However sqft_living had the higheist collinearity with price.**
+
+<p class="todo">
+TODO in FE: Drop sqft_above
+</p>
 
 ***
 
-# Number of levels values in each variable (bucketizing/binning ?)
+#### Check Multicollinearity between sqft_living and sqft_living15 have (0.76) using VIF 
 
 ```{r echo=TRUE, warning=FALSE}
-for (i in colnames(train[NUMERIC])){
-  print(
-    paste(i, nrow(unique(train[i])), sep = " => ")
-    )
-}
-
+model = lm(formula = price ~ sqft_living + sqft_living15,
+               data = train)
+vif(model)
 ```
 
+**Below 5, keep both**
+
 ***
+
+#### Check Multicollinearity between sqft_living and grade have (0.76) using VIF 
+
+```{r echo=TRUE, warning=FALSE}
+model = lm(formula = price ~ sqft_living + grade,
+               data = train)
+vif(model)
+```
+
+**Below 5, keep both**
+
+***
+
+#### Check Multicollinearity between sqft_living and bathrooms have (0.76) using VIF 
+
+```{r echo=TRUE, warning=FALSE}
+model = lm(formula = price ~ sqft_living + bathrooms,
+               data = train)
+vif(model)
+```
+
+**Below 5, keep both**
+
+***
+
+#### Potential factor variables
+
+```{r echo=FALSE, fig.height=5, warning=FALSE}
+
+g1 <- ggplot(train, aes(x=as.factor(bedrooms), y=price))+
+      geom_boxplot(notch=TRUE)+
+      scale_y_continuous(labels=scaleFUN)+
+      theme_light()
+
+g2<- ggplot(train, aes(x=as.factor(bathrooms), y=price))+
+      geom_boxplot(notch=TRUE)+
+      scale_y_continuous(labels=scaleFUN)+
+      theme_light()
+
+g3<- ggplot(train, aes(x=as.factor(sqft_living), y=price))+
+      geom_boxplot(notch=TRUE)+
+      scale_y_continuous(labels=scaleFUN)+
+      theme_light()
+
+g4<- ggplot(train, aes(x=as.factor(floors), y=price))+
+      geom_boxplot(notch=TRUE)+
+      scale_y_continuous(labels=scaleFUN)+
+      theme_light()
+
+
+g5<- ggplot(train, aes(x=as.factor(waterfront), y=price))+
+      geom_boxplot(notch=TRUE)+
+      scale_y_continuous(labels=scaleFUN)+
+      theme_light()
+
+g6<- ggplot(train, aes(x=as.factor(view), y=price))+
+      geom_boxplot(notch=TRUE)+
+      scale_y_continuous(labels=scaleFUN)+
+      theme_light()
+
+g7<- ggplot(train, aes(x=as.factor(condition), y=price))+
+      geom_boxplot(notch=TRUE)+
+      scale_y_continuous(labels=scaleFUN)+
+      theme_light()
+
+
+g8<- ggplot(train, aes(x=as.factor(grade), y=price))+
+      geom_boxplot(notch=TRUE)+
+      scale_y_continuous(labels=scaleFUN)+
+      theme_light()
+
+
+plot_grid(plotlist = list(g1, g2, g3, g4), nrow = 2, ncol=2)
+
+plot_grid(plotlist = list(g5, g6, g7, g8), nrow = 2, ncol=2)
+```
+
+**bedrooms: is not linearly correlated with target => convert to factor**
+
+**bathrooms: linearly correlated with target => leave it numerical**
+
+**sqft_living: linearly correlated with target => leave it numerical**
+
+**floors: is not linearly correlated with target => convert to factor**
+
+**waterfronts: is not linearly correlated with target => convert to factor**
+
+**view: is not linearly correlated with target => convert to factor**
+
+**condition: is not linearly correlated with target => convert to factor**
+
+**grade: linearly correlated with target => leave it numerical**
+
+
+**Also bedrooms 11 and 13 seems to be outliers => remove**
+
+<p class="todo">
+TODO in FE: Convert bedrooms, floors, waterfronts, view, and condition  to factor
+</p>
+
+<p class="todo">
+TODO in FE: Remove rows for bedroooms = 11 or 33
+</p>
+
+***
+
