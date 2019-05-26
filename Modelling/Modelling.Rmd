@@ -1,0 +1,158 @@
+---
+title: "Modelling"
+output:
+  html_document:
+    df_print: paged
+    css: styles.css
+---
+
+```{r setup, echo=FALSE, warning=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+load_reqs <- function(reqs) {
+  for(pkg in reqs) {
+    if (!(pkg %in% installed.packages())) { install.packages(pkg) }
+    suppressPackageStartupMessages(library(pkg, character.only = T))
+  }
+}
+
+# ADD LIBRARIES HERE
+load_reqs(c("tidyr", "dplyr", "data.table", "purrr", "ggplot2", "corrplot", "gridExtra", "grid", "cowplot", "PerformanceAnalytics", "dichromat", "wesanderson", "ie2misc", "caret", "xgboost", "Ckmeans.1d.dp"))
+```
+
+```{r echo=FALSE, warning=FALSE}
+########################################
+### Loading Data
+########################################
+
+train <- readRDS("../data/train_prepared.rds")
+test <- readRDS('../data/test_prepared.rds')
+```
+
+
+### Lasso regression model
+```{r echo=TRUE, warning=TRUE}
+require(methods)
+set.seed(1000)
+
+train_cols <- train
+train_cols$id <- NULL
+train_cols$price <- NULL
+train_cols$logPrice <- NULL
+
+train_cols <- data.matrix(train_cols)
+
+my_control <-trainControl(method="cv", number=5)
+lassoGrid <- expand.grid(alpha = 1, lambda = seq(0.001,0.1,by = 0.0005))
+
+lasso_mod <- train(x=train_cols, y=train$logPrice, method='glmnet', trControl= my_control, tuneGrid=lassoGrid) 
+lasso_mod$bestTune
+```
+
+```{r}
+min(lasso_mod$results$RMSE)
+
+lassoVarImp <- varImp(lasso_mod,scale=F)
+lassoImportance <- lassoVarImp$importance
+
+varsSelected <- length(which(lassoImportance$Overall!=0))
+varsNotSelected <- length(which(lassoImportance$Overall==0))
+
+cat('Lasso uses', varsSelected, 'variables in its model, and did not select', varsNotSelected, 'variables.')
+```
+
+```{r echo=FALSE, warning=FALSE}
+y_pred = predict(lasso_mod, newdata = train_cols)
+y_pred_reversed  = exp(y_pred)
+
+ggplot() +
+  geom_point(aes(x = train$sqft_living, y = train$price),
+             colour = 'black') +
+  geom_line(aes(x = train$sqft_living, y = y_pred_reversed),
+            colour = 'blue') +
+  ggtitle('Predictions on Train') +
+  xlab('Sqft_living') +
+  ylab('Price')
+```
+
+```{r}
+mape(train$price, y_pred_reversed)
+```
+
+**Very High MAPE**
+
+***
+
+### XGBoost
+
+```{r echo=TRUE, warning=TRUE}
+xgb_grid = expand.grid(
+nrounds = 500,
+eta = c(0.1, 0.05, 0.01),
+max_depth = c(2, 5),
+gamma = 0,
+colsample_bytree=1,
+min_child_weight=c(1, 2, 4),
+subsample=1
+)
+
+xgb_caret <- train(x=train_cols, y=train$logPrice, method='xgbTree', trControl= my_control, tuneGrid=xgb_grid) 
+xgb_caret$bestTune
+```
+
+***
+
+### Predictions
+
+```{r echo=FALSE, warning=FALSE}
+y_pred_XGB= predict(xgb_caret, data = train_cols)
+y_pred_reversed_XGB  = exp(y_pred_XGB)
+
+ggplot() +
+  geom_point(aes(x = train$sqft_living, y = train$price),
+             colour = 'black') +
+  geom_line(aes(x = train$sqft_living, y = y_pred_reversed_XGB),
+            colour = 'blue') +
+  ggtitle('Predictions on Train') +
+  xlab('Sqft_living') +
+  ylab('Price')
+```
+
+***
+
+### MAPE
+
+```{r echo=FALSE, warning=FALSE}
+mape(train$price, y_pred_reversed_XGB)
+```
+
+***
+
+### Feature Importance
+
+```{r echo=FALSE, warning=FALSE}
+mat <- xgb.importance (feature_names = colnames(train),model = xgb_caret$finalModel)
+xgb.ggplot.importance(importance_matrix = mat, rel_to_first = TRUE)
+```
+
+***
+
+### Predict on test and save
+
+```{r echo=FALSE, warning=FALSE}
+
+test_cols <- test
+test_cols$id <- NULL
+
+test_cols <- data.matrix(test_cols)
+
+test_y_pred_XGB= predict(xgb_caret, newdata  = test_cols)
+test_y_pred_reversed_XGB  = exp(test_y_pred_XGB)
+
+test_preds = as.data.frame( test$id )
+test_preds$price = test_y_pred_reversed_XGB
+colnames(test_preds)[1] <- "id"
+test_preds
+
+write.csv(test_preds, "../predictions/test_predictions.csv", row.names = FALSE)
+```

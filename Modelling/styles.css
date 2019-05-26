@@ -1,0 +1,33 @@
+h3 {
+  font-style: italic;
+  font-weight: bolder;
+  color: rgb(23, 97, 233);
+  margin: 40px 0 20px;
+}
+
+hr {
+  margin: 70px;
+  border-top: 7px solid #a29e9e;
+}
+
+strong {
+  font-size: 17px;
+}
+
+.todo {
+  background: antiquewhite;
+  padding: 10px;
+  border-radius: 15px;
+  color: sienna;
+  font-weight: bold;
+  font-style: italic;
+  font-size: 21px;
+  text-align: right;
+}
+
+.subtitle {
+  color: darkblue;
+  font-weight: bold;
+  font-size: 17px;
+  text-align: left;
+}
