@@ -37,9 +37,6 @@ glimpse(train)
 head(train)
 ```
 
-<p class="todo">
-TODO in FE: Drop `id`
-</p>
 
 ```{r echo=FALSE, warning=FALSE}
 ########################################
@@ -424,44 +421,44 @@ vif(model)
 ```{r echo=FALSE, fig.height=5, warning=FALSE}
 
 g1 <- ggplot(train, aes(x=as.factor(bedrooms), y=price))+
-      geom_boxplot(notch=TRUE)+
+      geom_boxplot(notch=FALSE)+
       scale_y_continuous(labels=scaleFUN)+
       theme_light()
 
 g2<- ggplot(train, aes(x=as.factor(bathrooms), y=price))+
-      geom_boxplot(notch=TRUE)+
+      geom_boxplot(notch=FALSE)+
       scale_y_continuous(labels=scaleFUN)+
       theme_light()
 
 g3<- ggplot(train, aes(x=as.factor(sqft_living), y=price))+
-      geom_boxplot(notch=TRUE)+
+      geom_boxplot(notch=FALSE)+
       scale_y_continuous(labels=scaleFUN)+
       theme_light()
 
 g4<- ggplot(train, aes(x=as.factor(floors), y=price))+
-      geom_boxplot(notch=TRUE)+
+      geom_boxplot(notch=FALSE)+
       scale_y_continuous(labels=scaleFUN)+
       theme_light()
 
 
 g5<- ggplot(train, aes(x=as.factor(waterfront), y=price))+
-      geom_boxplot(notch=TRUE)+
+      geom_boxplot(notch=FALSE)+
       scale_y_continuous(labels=scaleFUN)+
       theme_light()
 
 g6<- ggplot(train, aes(x=as.factor(view), y=price))+
-      geom_boxplot(notch=TRUE)+
+      geom_boxplot(notch=FALSE)+
       scale_y_continuous(labels=scaleFUN)+
       theme_light()
 
 g7<- ggplot(train, aes(x=as.factor(condition), y=price))+
-      geom_boxplot(notch=TRUE)+
+      geom_boxplot(notch=FALSE)+
       scale_y_continuous(labels=scaleFUN)+
       theme_light()
 
 
 g8<- ggplot(train, aes(x=as.factor(grade), y=price))+
-      geom_boxplot(notch=TRUE)+
+      geom_boxplot(notch=FALSE)+
       scale_y_continuous(labels=scaleFUN)+
       theme_light()
 
@@ -471,24 +468,24 @@ plot_grid(plotlist = list(g1, g2, g3, g4), nrow = 2, ncol=2)
 plot_grid(plotlist = list(g5, g6, g7, g8), nrow = 2, ncol=2)
 ```
 
-**bedrooms: is not linearly correlated with target => convert to factor**
+- **bedrooms: is not linearly correlated with target => convert to factor**
 
-**bathrooms: linearly correlated with target => leave it numerical**
+- **bathrooms: linearly correlated with target => leave it numerical**
 
-**sqft_living: linearly correlated with target => leave it numerical**
+- **sqft_living: linearly correlated with target => leave it numerical**
 
-**floors: is not linearly correlated with target => convert to factor**
+- **floors: is not linearly correlated with target => convert to factor**
 
-**waterfronts: is not linearly correlated with target => convert to factor**
+- **waterfronts: is not linearly correlated with target => convert to factor**
 
-**view: is not linearly correlated with target => convert to factor**
+- **view: is not linearly correlated with target => convert to factor**
 
-**condition: is not linearly correlated with target => convert to factor**
+- **condition: is not linearly correlated with target => convert to factor**
 
-**grade: linearly correlated with target => leave it numerical**
+- **grade: linearly correlated with target => leave it numerical**
 
 
-**Also bedrooms 11 and 13 seems to be outliers => remove**
+- **Also bedrooms 11 and 13 seems to be outliers => remove**
 
 <p class="todo">
 TODO in FE: Convert bedrooms, floors, waterfronts, view, and condition  to factor

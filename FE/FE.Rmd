@@ -17,7 +17,7 @@ load_reqs <- function(reqs) {
 }
 
 # ADD LIBRARIES HERE
-load_reqs(c("tidyr", "dplyr", "data.table", "purrr", "ggplot2", "corrplot", "gridExtra", "grid", "cowplot", "PerformanceAnalytics", "dichromat", "wesanderson", "ie2misc"))
+load_reqs(c("tidyr", "dplyr", "data.table", "purrr", "ggplot2", "corrplot", "gridExtra", "grid", "cowplot", "PerformanceAnalytics", "dichromat", "wesanderson"))
 ```
 
 ```{r echo=FALSE, warning=FALSE}
@@ -32,8 +32,9 @@ test <- read.csv('../data/house_price_test.csv')
 
 ### Drop variables
 ```{r echo=TRUE, warning=FALSE}
-for (i in c('id', "sqft_lot", "sqft_lot15", "date", "yr_built", "long", "lat",            "sqft_above")){
+for (i in c("sqft_lot", "sqft_lot15", "date", "yr_built", "long", "lat",            "sqft_above")){
   train[[i]] <- NULL
+  test[[i]] <- NULL
 }
 ```
 
@@ -43,6 +44,10 @@ for (i in c('id', "sqft_lot", "sqft_lot15", "date", "yr_built", "long", "lat",  
 ```{r echo=TRUE, warning=FALSE}
 train$yr_renovated[train$yr_renovated != 0] = 1
 train$sqft_basement[train$sqft_basement != 0] = 1
+
+test$yr_renovated[test$yr_renovated != 0] = 1
+test$sqft_basement[test$sqft_basement != 0] = 1
+
 ```
 
 ***
@@ -51,6 +56,7 @@ train$sqft_basement[train$sqft_basement != 0] = 1
 ```{r echo=TRUE, warning=FALSE}
 for (i in c('bedrooms', 'floors', 'waterfront', 'view', 'condition', 'zipcode', 'yr_renovated', 'sqft_basement')){
   train[[i]] = as.factor(train[[i]])
+  test[[i]] = as.factor(test[[i]])
 }
 
 train <- train[train$bedrooms != 11, ]
@@ -58,11 +64,24 @@ train <- train[train$bedrooms != 33, ]
 train <- train[train$sqft_living != 13540, ]
 ```
 
+### Log Price
+```{r echo=TRUE, warning=FALSE}
+train$logPrice <- log(train$price)
+```
+
+
+```{r echo=FALSE, warning=FALSE}
+########################################
+### SAVE prepared data
+########################################
+saveRDS(train, "../data/train_prepared.rds")
+saveRDS(test, "../data/test_prepared.rds")
+```
 
 ### Baseline Model
 
 ```{r echo=TRUE, warning=FALSE}
-model <- lm(formula = price ~ bedrooms + bathrooms + sqft_living
+model <- lm(formula = logPrice ~ bedrooms + bathrooms + sqft_living
                         + floors + waterfront + view + condition
                         + grade + sqft_basement + yr_renovated + zipcode
                         + sqft_living15,
@@ -71,16 +90,18 @@ model <- lm(formula = price ~ bedrooms + bathrooms + sqft_living
 summary(model)
 ```
 
-**R2 score of 81.01**
+**R2 score of 87.7**
 
 ***
 
 ```{r echo=FALSE, warning=FALSE}
 y_pred = predict(model, newdata = train)
+y_pred_reversed  = exp(y_pred)
+
 ggplot() +
   geom_point(aes(x = train$sqft_living, y = train$price),
              colour = 'black') +
-  geom_line(aes(x = train$sqft_living, y = y_pred),
+  geom_line(aes(x = train$sqft_living, y = y_pred_reversed),
             colour = 'blue') +
   ggtitle('Predictions on Train') +
   xlab('Sqft_living') +
@@ -102,7 +123,7 @@ paste("Risudals Mean: ", mean(model$residuals), sep=" ")
 ### MAPE
 
 ```{r echo=FALSE, warning=FALSE}
-mape(predicted = y_pred, observed = train$price)
+Metrics::mape(train$price, y_pred_reversed)
 ```
 
 **High MAPE**

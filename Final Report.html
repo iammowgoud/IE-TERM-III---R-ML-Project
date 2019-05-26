@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+
+<html xmlns="http://www.w3.org/1999/xhtml">
+
+<head>
+
+  <meta charset="utf-8" />
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+  <meta name="generator" content="pandoc" />
+
+  <title>Modelling</title>
+
+  <style>
+    body {
+      margin: 0px;
+    }
+
+    header {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0;
+      padding: 20px 0 0 0;
+      height: 100%;
+      color: white;
+      background: grey;
+    }
+
+    header div {
+      margin: 0 20px;
+    }
+
+    header nav {
+      background-color: 000;
+      border-top: 4px solid rgb(44, 44, 44);
+      border-bottom: 4px solid rgb(44, 44, 44);
+    }
+
+    header ul {
+      list-style: none;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    header li {
+      cursor: pointer;
+      display: inline-block;
+      width: 200px;
+      font-size: 30px;
+      text-align: center;
+      padding: 10px;
+      margin: 0;
+    }
+
+    header li:hover {
+      background-color: #555;
+    }
+
+    iframe {
+      width: 100vw;
+      height: 100vh;
+      border: 0;
+    }
+  </style>
+
+  <script>
+    document.addEventListener("DOMContentLoaded", function (event) {
+      document.getElementById("menu").addEventListener('click', function (event) {
+        var iframe = document.getElementById("page");
+        var target = event.srcElement;
+        switch (target.id) {
+          case "eda":
+            iframe.src = "./EDA/EDA.html";
+            break;
+          case "fe":
+            iframe.src = "./FE/FE.html";
+            break;
+          case "model":
+            iframe.src = "./Modelling/Modelling.html";
+            break;
+        }
+      })
+    });
+  </script>
+</head>
+
+<body>
+
+  <header>
+
+    <div>
+      <h1> House Prices Predictions </h1>
+      <p> Hatem AbdelMowgoud Hassan</p>
+      <p> O1</p>
+    </div>
+    <nav id="menu">
+      <ul>
+        <li id="eda">EDA</li>
+        <li id="fe">FE & Baseline</li>
+        <li id="model">Modelling</li>
+      </ul>
+    </nav>
+  </header>
+
+  <iframe id="page" src="./EDA/EDA.html"></iframe>
+
+</body>
+
+</html>
