@@ -1,8 +1,9 @@
 ---
-title: "FE"
+title: "FE & Baseline"
 output:
   html_document:
     df_print: paged
+    css: styles.css
 ---
 
 ```{r setup, echo=FALSE, warning=FALSE}
@@ -16,7 +17,7 @@ load_reqs <- function(reqs) {
 }
 
 # ADD LIBRARIES HERE
-load_reqs(c("tidyr", "dplyr", "data.table", "purrr", "ggplot2", "corrplot", "gridExtra", "grid", "cowplot", "PerformanceAnalytics", "dichromat", "wesanderson"))
+load_reqs(c("tidyr", "dplyr", "data.table", "purrr", "ggplot2", "corrplot", "gridExtra", "grid", "cowplot", "PerformanceAnalytics", "dichromat", "wesanderson", "ie2misc"))
 ```
 
 ```{r echo=FALSE, warning=FALSE}
@@ -28,9 +29,8 @@ train <- read.csv('../data/house_price_train.csv')
 test <- read.csv('../data/house_price_test.csv')
 ```
 
-***
 
-### Drop
+### Drop variables
 ```{r echo=TRUE, warning=FALSE}
 for (i in c('id', "sqft_lot", "sqft_lot15", "date", "yr_built", "long", "lat",            "sqft_above")){
   train[[i]] <- NULL
@@ -55,34 +55,27 @@ for (i in c('bedrooms', 'floors', 'waterfront', 'view', 'condition', 'zipcode', 
 
 train <- train[train$bedrooms != 11, ]
 train <- train[train$bedrooms != 33, ]
-colnames(train) <- train[train$sqft_living != 13540, ]
+train <- train[train$sqft_living != 13540, ]
 ```
 
 
-### Model
+### Baseline Model
 
 ```{r echo=TRUE, warning=FALSE}
-model <- lm(formula = price ~  bathrooms + floors + waterfront +
-              view + condition + sqft_basement + yr_renovated +
-              zipcode + sqft_living15 + sqft_living + grade+
-              waterfront + view + bedrooms,
-          data = train)
+model <- lm(formula = price ~ bedrooms + bathrooms + sqft_living
+                        + floors + waterfront + view + condition
+                        + grade + sqft_basement + yr_renovated + zipcode
+                        + sqft_living15,
+                  data = train)
+
 summary(model)
 ```
 
+**R2 score of 81.01**
 
-```{r}
-# Bedrooms are not statisticaaly significant, so we would omit it.
-model = lm(formula = price ~  bathrooms + floors + waterfront + view + condition +
-             + sqft_basement + yr_renovated + zipcode + sqft_living15 + sqft_living + grade,
-           data = train)
-summary(model)
+***
 
-hist(model$residuals)
-mean(model$residuals)
-```
-
-```{r}
+```{r echo=FALSE, warning=FALSE}
 y_pred = predict(model, newdata = train)
 ggplot() +
   geom_point(aes(x = train$sqft_living, y = train$price),
@@ -93,3 +86,23 @@ ggplot() +
   xlab('Sqft_living') +
   ylab('Price')
 ```
+
+***
+
+### Residuals Analysis
+
+```{r}
+hist(model$residuals)
+plot(model)
+paste("Risudals Mean: ", mean(model$residuals), sep=" ")
+```
+
+***
+
+### MAPE
+
+```{r echo=FALSE, warning=FALSE}
+mape(predicted = y_pred, observed = train$price)
+```
+
+**High MAPE**
